@@ -1,0 +1,244 @@
+<html lang="ru">
+<head>
+    <!--    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0"/>-->
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content, maximum-scale=1.0, user-scalable=0">
+    <title>GRC</title>
+    <style>
+        body {
+            background-color: #1b2028;
+            box-sizing: border-box;
+            overflow: hidden;
+            margin: 0;
+            height: 100%;
+            max-height: 100%;
+        }
+
+        * {
+            user-select: none;
+            overscroll-behavior: none;
+        }
+
+        #touchpad {
+            position: absolute;
+            top: 18vw;
+            right: 0;
+            bottom: 0;
+            left: 0;
+        }
+
+        #log {
+            pointer-events: none;
+            font-family: 'sans-serif';
+            color: rgba(255, 255, 255, 0.85);
+            max-height: 70vw;
+            overflow: hidden;
+        }
+
+        #input {
+            position: absolute;
+            border-radius: 2vw;
+            top: 2vw;
+            left: 2vw;
+            width: 96vw;
+            height: 15vw;
+            border: none;
+            background-color: rgba(255, 255, 255, 0.1);
+            color: rgba(0, 0, 0, 0);
+            padding: 0 2vw;
+            font-size: 20px;
+        }
+    </style>
+</head>
+<body scroll="no">
+
+<div id="touchpad">
+    <div id="log"></div>
+</div>
+<input id="input" type="text" placeholder="Ввод текста" autocapitalize="none" autocomplete="off" autocorrect="off"
+       spellcheck="false"/>
+
+<script>
+    const touchpadElem = document.getElementById('touchpad');
+    const logElem = document.getElementById('log');
+    const inputElem = document.getElementById('input');
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // websockets
+
+    let socket = new WebSocket("ws://" + location.host + "/ws");
+    console.log("Attempting Connection...");
+
+    socket.onopen = () => {
+        console.log("Successfully Connected");
+        socket.send("Hi From the Client!")
+    };
+
+    socket.onclose = event => {
+        console.log("Socket Closed Connection: ", event);
+        socket.send("Client Closed!")
+    };
+
+    socket.onerror = error => {
+        console.log("Socket Error: ", error);
+    };
+
+    function send(msg) {
+        if (msg.type === 'mousemove') {
+            log(`mousemove x=${msg.x.toFixed(1)} y=${msg.y.toFixed(1)}`)
+        } else if (msg.type === 'scroll') {
+            log(`mousemove x=${msg.x.toFixed(1)} y=${msg.y.toFixed(1)}`)
+        } else if (msg.type === 'click') {
+            log(`click`)
+        } else if (msg.type === 'rclick') {
+            log(`rclick`)
+        }
+        socket.send(JSON.stringify(msg));
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // touch handler
+
+
+    let removers = [];
+
+    function applyRemovers() {
+        for (const remover of removers) {
+            remover();
+        }
+        removers = [];
+    }
+
+    const tapTime = 200;
+    let lastClick = 0;
+
+    touchpadElem.addEventListener("touchstart", (e) => {
+        const touches = e.touches.length
+        applyRemovers();
+        log(`touch ${touches}`)
+
+        const touch = e.touches[0];
+        let touchedAt = Date.now();
+        const sinceClicked = touchedAt - lastClick
+        const selectMode = sinceClicked < 400
+        let prev = {
+            x: touch.pageX,
+            y: touch.pageY,
+        }
+
+        const onTouchMove = (e) => {
+            const touch = e.touches[0];
+
+            let delta = {
+                x: touch.pageX - prev.x,
+                y: touch.pageY - prev.y
+            }
+            prev = {
+                x: touch.pageX,
+                y: touch.pageY,
+            }
+
+            if (touches === 1) {
+                send({
+                    type: 'mousemove',
+                    x: delta.x,
+                    y: delta.y,
+                    select_mode: selectMode
+                });
+            } else if (touches === 2) {
+                const timeElapsed = Date.now() - touchedAt;
+                if (timeElapsed > tapTime) {
+                    send({
+                        type: 'scroll',
+                        x: delta.x,
+                        y: delta.y
+                    });
+                }
+            }
+        }
+        const onTouchEnd = () => {
+            const timeElapsed = Date.now() - touchedAt;
+
+            if (touches === 1) {
+                send({type: 'end_mousemove'});
+            }
+
+            if (timeElapsed < tapTime) {
+                if (touches === 2) {
+                    send({type: 'rclick'});
+                } else if (touches === 3) {
+                    send({type: 'shift+click'});
+                } else if (touches === 4) {
+                    send({type: 'ctrl+click'});
+                }
+            }
+
+            if (selectMode) {
+                send({type: 'end_select'});
+            }
+
+            remover();
+        }
+        const remover = () => {
+            e.target.removeEventListener("touchmove", onTouchMove);
+            e.target.removeEventListener("touchend", onTouchEnd);
+        }
+        e.target.addEventListener("touchmove", onTouchMove);
+        e.target.addEventListener("touchend", onTouchEnd);
+        removers.push(remover);
+    });
+
+    touchpadElem.addEventListener('click', (e) => {
+        applyRemovers();
+        lastClick = Date.now();
+        send({type: 'click'});
+    })
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // logs
+
+    let logs = [];
+
+    function log() {
+        for (const l of arguments) {
+            logs = [
+                l,
+                ...logs.slice(0, 50)
+            ]
+        }
+
+        let logsHtml = '';
+        for (const l of logs) {
+            logsHtml += `${l}<br/>`
+        }
+
+        logElem.innerHTML = logsHtml;
+    }
+
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // input
+
+    inputElem.addEventListener('input', (e) => {
+        if (e.inputType == "insertText") {
+            send({type: 'keypress', value: e.data});
+            log(`e.data: ${e.data}`)
+        }
+
+        if (e.inputType == "deleteContentBackward") {
+            send({type: 'keypress', value: '$backspace'});
+        }
+
+        if (e.inputType == "insertCompositionText") {
+            log('insertCompositionText')
+        }
+    })
+
+    inputElem.addEventListener('change', (e) => {
+        inputElem.value = '||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||';
+    })
+    inputElem.value = '||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||';
+</script>
+
+</body>
+</html>
+
