@@ -1,10 +1,19 @@
 <html lang="ru">
+
 <head>
     <!--    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0"/>-->
     <meta name="viewport"
           content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content, maximum-scale=1.0, user-scalable=0">
+    <link rel="stylesheet" href=/assets/fonts/FontAwesome6.0.0/css/all.min.css>
     <title>GRC</title>
     <style>
+        @font-face {
+            font-family: 'Roboto Slab';
+            font-style: normal;
+            font-weight: 400;
+            src: url('/assets/fonts/RobotoSlab/RobotoSlab-Regular.ttf');
+        }
+
         body {
             background-color: #1b2028;
             box-sizing: border-box;
@@ -21,78 +30,199 @@
 
         #touchpad {
             position: absolute;
-            top: 18vw;
+            top: 150px;
             right: 0;
             bottom: 0;
             left: 0;
         }
 
         #log {
+            padding-left: 15px;
+            font-family: "Roboto Slab", sans-serif;
+            color: #d2d2d2;
             pointer-events: none;
-            font-family: 'sans-serif';
             color: rgba(255, 255, 255, 0.85);
-            max-height: 70vw;
+            max-height: calc(100vh - 170px);
             overflow: hidden;
+            white-space: break-spaces;
+            word-break: normal;
+            max-width: calc(100vw - 30px);
         }
 
         #input {
             position: absolute;
-            border-radius: 2vw;
-            top: 2vw;
-            left: 2vw;
-            width: 96vw;
-            height: 15vw;
+            border-radius: 10px;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            height: 80px;
             border: none;
             background-color: rgba(255, 255, 255, 0.1);
             color: rgba(0, 0, 0, 0);
-            padding: 0 2vw;
-            font-size: 20px;
+        }
+
+        #input-overlay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            height: 80px;
+            border: none;
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            justify-content: center;
+            font-size: 33px;
+            text-shadow: 0 0 3px #007ad2;
+            font-family: 'Roboto Slab', sans-serif;
+            color: #007ad2;
+            pointer-events: none;
+        }
+
+        #input-buttons {
+            position: absolute;
+            border-radius: 10px;
+            top: 90px;
+            margin-top: 10px;
+            left: 10px;
+            right: 10px;
+            height: 40px;
+            border: none;
+            display: flex;
+            flex-direction: row;
+            align-items: stretch;
+            justify-content: stretch;
+            background-color: rgba(255, 255, 255, 0.1);
+            font-size: 19px;
+            font-family: 'Roboto Slab', sans-serif;
+            color: #007ad2;
+        }
+
+        .input-button {
+            flex: 1;
+            line-height: 40px;
+            text-align: center;
+        }
+
+        #input-buttons-esc {
+            color: #ed6271;
+        }
+
+        #input-buttons-reload {
+            color: #007ad2;
+        }
+
+        #input-buttons-enter {
+            color: #8dc56f;
+        }
+
+        .log-item {
+            padding: 3px 0;
+            border-bottom: 1px solid #2d3642;
         }
     </style>
 </head>
+
 <body scroll="no">
 
 <div id="touchpad">
     <div id="log"></div>
 </div>
-<input id="input" type="text" placeholder="Ввод текста" autocapitalize="none" autocomplete="off" autocorrect="off"
+<input id="input" type="text" placeholder="" autocapitalize="none" autocomplete="off" autocorrect="off"
+
        spellcheck="false"/>
+<div id="input-overlay"><i class="fa-regular fa-keyboard"></i></div>
+<div id="input-buttons">
+    <div id="input-buttons-esc" class="input-button">Esc</div>
+    <div id="input-buttons-reload" class="input-button">
+
+        <i class="fa-solid fa-arrows-rotate"></i>
+        Reload
+    </div>
+    <div id="input-buttons-enter" class="input-button">Enter</div>
+</div>
 
 <script>
     const touchpadElem = document.getElementById('touchpad');
     const logElem = document.getElementById('log');
     const inputElem = document.getElementById('input');
+    const escElem = document.getElementById('input-buttons-esc');
+    const reloadElem = document.getElementById('input-buttons-reload');
+    const enterElem = document.getElementById('input-buttons-enter');
+
+    let logs = [];
+    let socket = null;
+    let inputFocused = false;
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // websockets
 
-    let socket = new WebSocket("ws://" + location.host + "/ws");
-    console.log("Attempting Connection...");
+    connect();
 
-    socket.onopen = () => {
-        console.log("Successfully Connected");
-        socket.send("Hi From the Client!")
-    };
+    function connect() {
+        try {
+            if (socket != null) {
+                socket.close()
+            }
+        } catch (e) {
+        }
 
-    socket.onclose = event => {
-        console.log("Socket Closed Connection: ", event);
-        socket.send("Client Closed!")
-    };
+        socket = new WebSocket("ws://" + location.host + "/ws");
 
-    socket.onerror = error => {
-        console.log("Socket Error: ", error);
-    };
+        log("Attempting Connection...");
+
+        socket.onopen = () => {
+            log("Successfully Connected");
+        };
+
+        socket.onclose = event => {
+            log("Socket Closed Connection: ", event);
+            connect();
+        };
+
+        socket.onerror = error => {
+            log("Socket Error: ", error);
+        };
+    }
+
+    function isNumber(value) {
+        return typeof value === 'number' && isFinite(value);
+    }
 
     function send(msg) {
-        if (msg.type === 'mousemove') {
-            log(`mousemove x=${msg.x.toFixed(1)} y=${msg.y.toFixed(1)}`)
-        } else if (msg.type === 'scroll') {
-            log(`mousemove x=${msg.x.toFixed(1)} y=${msg.y.toFixed(1)}`)
-        } else if (msg.type === 'click') {
-            log(`click`)
-        } else if (msg.type === 'rclick') {
-            log(`rclick`)
+        if (socket == null) {
+            return log('Not connected yet');
         }
+
+        let msgStr = `msg [${msg.type}] `
+        for (const key of Object.keys(msg)) {
+            if (key === 'type') {
+                continue;
+            }
+
+            const value = msg[key];
+            let valueStr = '?'
+            if (isNumber(value)) {
+                valueStr = value.toFixed(2)
+            } else if (value.toString != null) {
+                valueStr = value.toString();
+            }
+
+            msgStr += `${key}=${valueStr} `
+        }
+
+        log(msgStr)
+
+        // if (msg.type === 'mousemove') {
+        //     log(`mousemove x=${msg.x.toFixed(1)} y=${msg.y.toFixed(1)}`)
+        // } else if (msg.type === 'scroll') {
+        //     log(`mousemove x=${msg.x.toFixed(1)} y=${msg.y.toFixed(1)}`)
+        // } else if (msg.type === 'click') {
+        //     log(`click`)
+        // } else if (msg.type === 'rclick') {
+        //     log(`rclick`)
+        // }
+
         socket.send(JSON.stringify(msg));
     }
 
@@ -194,22 +324,45 @@
         send({type: 'click'});
     })
 
+    escElem.addEventListener('click', (e) => {
+        applyRemovers();
+        send({type: 'esc'});
+    })
+
+    enterElem.addEventListener('click', (e) => {
+        applyRemovers();
+        lastClick = Date.now();
+        send({type: 'enter'});
+    })
+
+    reloadElem.addEventListener('click', (e) => {
+        location.reload()
+    })
+
+    inputElem.addEventListener('focus', (e) => {
+        inputFocused = true;
+    })
+
+    inputElem.addEventListener('blur', (e) => {
+        inputFocused = false;
+    })
+
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // logs
 
-    let logs = [];
-
     function log() {
         for (const l of arguments) {
+            const logStr = [...arguments].join(' ');
+
             logs = [
-                l,
+                logStr,
                 ...logs.slice(0, 50)
             ]
         }
 
         let logsHtml = '';
         for (const l of logs) {
-            logsHtml += `${l}<br/>`
+            logsHtml += `<div class="log-item">${l}</div>`
         }
 
         logElem.innerHTML = logsHtml;
@@ -226,11 +379,14 @@
 
         if (e.inputType == "deleteContentBackward") {
             send({type: 'keypress', value: '$backspace'});
+            log(`$backspace`);
         }
 
         if (e.inputType == "insertCompositionText") {
             log('insertCompositionText')
         }
+
+        log(e.inputType);
     })
 
     inputElem.addEventListener('change', (e) => {
@@ -240,5 +396,5 @@
 </script>
 
 </body>
-</html>
 
+</html>

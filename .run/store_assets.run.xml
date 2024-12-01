@@ -1,0 +1,11 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="store_assets" type="GoApplicationRunConfiguration" factoryName="Go Application">
+    <module name="grc" />
+    <working_directory value="$PROJECT_DIR$" />
+    <kind value="PACKAGE" />
+    <package value="github.com/feleks/grc/assets" />
+    <directory value="$PROJECT_DIR$" />
+    <filePath value="$PROJECT_DIR$/assets/store.go" />
+    <method v="2" />
+  </configuration>
+</component>

@@ -6,6 +6,8 @@ import (
 	"github.com/gorilla/websocket"
 	"log"
 	"math"
+	"syscall"
+	"unsafe"
 )
 
 type point struct {
@@ -81,7 +83,19 @@ func (h *handler) handle(conn *websocket.Conn, msgRaw []byte) error {
 			h.mouseDown = true
 		}
 
-		robotgo.MoveRelative(int(x), int(y))
+		userDll := syscall.NewLazyDLL("user32.dll")
+		getWindowRectProc := userDll.NewProc("GetCursorPos")
+		type POINT struct {
+			X, Y int32
+		}
+		var pt POINT
+		_, _, eno := syscall.SyscallN(getWindowRectProc.Addr(), uintptr(unsafe.Pointer(&pt)))
+		if eno != 0 {
+			return nil
+		}
+		log.Printf("[cursor.Pos] X:%d Y:%d", pt.X, pt.Y)
+
+		robotgo.Move(int(pt.X)+int(x), int(pt.Y)+int(y))
 	case "end_mousemove":
 		h.mouseMove = false
 		log.Printf("end move")
@@ -99,8 +113,13 @@ func (h *handler) handle(conn *websocket.Conn, msgRaw []byte) error {
 		robotgo.KeyDown("ctrl")
 		robotgo.Click()
 		robotgo.KeyUp("ctrl")
+
 	case "rclick":
 		robotgo.Click("right")
+	case "esc":
+		robotgo.KeyPress("escape")
+	case "enter":
+		robotgo.KeyPress("enter")
 	case "scroll":
 		mousemoveMsg := &MouseMoveMessage{}
 		err = json.Unmarshal(msgRaw, mousemoveMsg)
@@ -127,7 +146,7 @@ func (h *handler) handle(conn *websocket.Conn, msgRaw []byte) error {
 			h.scrollAccumulation.y = math.Mod(h.scrollAccumulation.y, 1.0)
 		}
 
-		//log.Printf("scroll, x=%d, y=%d", x, y)гггггhello
+		//log.Printf("scroll, x=%d, y=%d", x, y)
 
 		if x != 0 || y != 0 {
 			robotgo.Scroll(x, y)
