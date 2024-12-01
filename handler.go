@@ -6,8 +6,6 @@ import (
 	"github.com/gorilla/websocket"
 	"log"
 	"math"
-	"syscall"
-	"unsafe"
 )
 
 type point struct {
@@ -51,8 +49,8 @@ func (h *handler) handle(conn *websocket.Conn, msgRaw []byte) error {
 			return err
 		}
 
-		x := mousemoveMsg.X * 3.3
-		y := mousemoveMsg.Y * 3.3
+		x := mousemoveMsg.X * 4.5
+		y := mousemoveMsg.Y * 4.1
 
 		if !h.mouseMove {
 			h.mouseMove = true
@@ -83,19 +81,21 @@ func (h *handler) handle(conn *websocket.Conn, msgRaw []byte) error {
 			h.mouseDown = true
 		}
 
-		userDll := syscall.NewLazyDLL("user32.dll")
-		getWindowRectProc := userDll.NewProc("GetCursorPos")
-		type POINT struct {
-			X, Y int32
+		if x != 0 || y != 0 {
+			screenX, screenY, err := getCursorPos()
+			if err != nil {
+				return err
+			}
+			robotgo.Move(screenX+int(x), screenY+int(y))
+			//screenAfterX, screenAfterY, err := getCursorPos()
+			//if err != nil {
+			//	return err
+			//}
+			//
+			//if screenX == screenAfterX && screenY == screenAfterY {
+			//	robotgo.Move(100, 100)
+			//}
 		}
-		var pt POINT
-		_, _, eno := syscall.SyscallN(getWindowRectProc.Addr(), uintptr(unsafe.Pointer(&pt)))
-		if eno != 0 {
-			return nil
-		}
-		log.Printf("[cursor.Pos] X:%d Y:%d", pt.X, pt.Y)
-
-		robotgo.Move(int(pt.X)+int(x), int(pt.Y)+int(y))
 	case "end_mousemove":
 		h.mouseMove = false
 		log.Printf("end move")

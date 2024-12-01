@@ -14,6 +14,8 @@ func index(w http.ResponseWriter, r *http.Request) {
 
 	if path == "/" {
 		assetsEndpoint(w, r, "/assets/index.html")
+	} else if path == "/favicon.ico" {
+		assetsEndpoint(w, r, "/assets/icon.ico")
 	} else if strings.HasPrefix(path, "/assets/") {
 		assetsEndpoint(w, r, "")
 	} else {

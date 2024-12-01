@@ -5,7 +5,8 @@
     <meta name="viewport"
           content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content, maximum-scale=1.0, user-scalable=0">
     <link rel="stylesheet" href=/assets/fonts/FontAwesome6.0.0/css/all.min.css>
-    <title>GRC</title>
+    <link rel="icon" href="/favicon.png">
+    <title>grc</title>
     <style>
         @font-face {
             font-family: 'Roboto Slab';
@@ -34,6 +35,11 @@
             right: 0;
             bottom: 0;
             left: 0;
+
+            /* https://www.magicpattern.design/tools/css-backgrounds */
+            opacity: 0.8;
+            background-image: radial-gradient(#404a5a 0.5px, #1b2028 0.5px);
+            background-size: 10px 10px;
         }
 
         #log {
@@ -47,6 +53,8 @@
             white-space: break-spaces;
             word-break: normal;
             max-width: calc(100vw - 30px);
+            transition: opacity 0.5s ease;
+            opacity: 0;
         }
 
         #input {
@@ -109,7 +117,11 @@
         }
 
         #input-buttons-reload {
-            color: #007ad2;
+            color: #3f9edb;
+        }
+
+        #input-buttons-toggle-logs {
+            color: #00c1a6;
         }
 
         #input-buttons-enter {
@@ -129,16 +141,18 @@
     <div id="log"></div>
 </div>
 <input id="input" type="text" placeholder="" autocapitalize="none" autocomplete="off" autocorrect="off"
-
        spellcheck="false"/>
 <div id="input-overlay"><i class="fa-regular fa-keyboard"></i></div>
 <div id="input-buttons">
-    <div id="input-buttons-esc" class="input-button">Esc</div>
+    <div id="input-buttons-toggle-logs" class="input-button">
+        <i class="fa-solid fa-book"></i>
+        Logs
+    </div>
     <div id="input-buttons-reload" class="input-button">
-
         <i class="fa-solid fa-arrows-rotate"></i>
         Reload
     </div>
+    <div id="input-buttons-esc" class="input-button">Esc</div>
     <div id="input-buttons-enter" class="input-button">Enter</div>
 </div>
 
@@ -149,7 +163,9 @@
     const escElem = document.getElementById('input-buttons-esc');
     const reloadElem = document.getElementById('input-buttons-reload');
     const enterElem = document.getElementById('input-buttons-enter');
+    const toggleLogsElem = document.getElementById('input-buttons-toggle-logs');
 
+    let showLogs = localStorage.getItem("grcShowLogs") === "true";
     let logs = [];
     let socket = null;
     let inputFocused = false;
@@ -213,16 +229,6 @@
 
         log(msgStr)
 
-        // if (msg.type === 'mousemove') {
-        //     log(`mousemove x=${msg.x.toFixed(1)} y=${msg.y.toFixed(1)}`)
-        // } else if (msg.type === 'scroll') {
-        //     log(`mousemove x=${msg.x.toFixed(1)} y=${msg.y.toFixed(1)}`)
-        // } else if (msg.type === 'click') {
-        //     log(`click`)
-        // } else if (msg.type === 'rclick') {
-        //     log(`rclick`)
-        // }
-
         socket.send(JSON.stringify(msg));
     }
 
@@ -249,6 +255,7 @@
 
         const touch = e.touches[0];
         let touchedAt = Date.now();
+        let moved = false;
         const sinceClicked = touchedAt - lastClick
         const selectMode = sinceClicked < 400
         let prev = {
@@ -257,6 +264,7 @@
         }
 
         const onTouchMove = (e) => {
+            moved = true;
             const touch = e.touches[0];
 
             let delta = {
@@ -290,7 +298,12 @@
             const timeElapsed = Date.now() - touchedAt;
 
             if (touches === 1) {
-                send({type: 'end_mousemove'});
+                if (moved) {
+                    send({type: 'end_mousemove'});
+                } else {
+                    send({type: 'click'});
+                    lastClick = Date.now();
+                }
             }
 
             if (timeElapsed < tapTime) {
@@ -318,11 +331,11 @@
         removers.push(remover);
     });
 
-    touchpadElem.addEventListener('click', (e) => {
-        applyRemovers();
-        lastClick = Date.now();
-        send({type: 'click'});
-    })
+    // touchpadElem.addEventListener('click', (e) => {
+    //     applyRemovers();
+    //     lastClick = Date.now();
+    //     send({type: 'click'});
+    // })
 
     escElem.addEventListener('click', (e) => {
         applyRemovers();
@@ -347,6 +360,12 @@
         inputFocused = false;
     })
 
+    toggleLogsElem.addEventListener('click', (e) => {
+        showLogs = !showLogs;
+        localStorage.setItem("grcShowLogs", showLogs ? "true" : "false");
+        applyLogsVisibility();
+    })
+
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // logs
 
@@ -367,6 +386,16 @@
 
         logElem.innerHTML = logsHtml;
     }
+
+    function applyLogsVisibility() {
+        if (showLogs) {
+            logElem.style.opacity = '1';
+        } else {
+            logElem.style.opacity = '0';
+        }
+    }
+
+    applyLogsVisibility();
 
     ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     // input

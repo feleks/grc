@@ -1,8 +1,9 @@
 go install github.com/tc-hib/go-winres@latest
 go-winres simply --icon .\assets\icon.ico
+go build -ldflags="-H windowsgui"
 
 
 rm assets_contents.go
 rm grc.exe
 go run assets/store.go
-go build -ldflags="-H windowsgui"
+go build
